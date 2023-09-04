@@ -25,11 +25,11 @@ Java_com_applications_resnetjni_MainActivity_createModel(JNIEnv *env,
                                                          jobject j_obj,
                                                          jstring input_shape,
                                                          jint unit,
-                                                         jboolean pre_trained
+                                                         jboolean cnn_trainable
                                                          ) {
   const char *in_shape = env->GetStringUTFChars(input_shape, 0);
   std::string in(in_shape);
-  ml::train::Model *model_ = createResnet18(in, unit, pre_trained);
+  ml::train::Model *model_ = createResnet18(in, unit, cnn_trainable);
   return reinterpret_cast<jlong>(model_);
 }
 

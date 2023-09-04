@@ -252,19 +252,19 @@ public class MainActivity extends AppCompatActivity {
 				String bin_path=getApplicationContext().getFilesDir().getPath().toString()+"/"+edit_save.getText().toString();
 				String bin_best_path=getApplicationContext().getFilesDir().getPath().toString()+"/"+edit_save_best.getText().toString();
 				String in_shape = channel+":"+height+":"+width;
-				boolean cnn_train = "1".equals(((EditText) findViewById(R.id.et_cnn_train)).getText().toString())? true: false;
+				boolean cnn_trainable = "1".equals(((EditText) findViewById(R.id.et_cnn_train)).getText().toString())? true: false;
 				boolean load_pretrained = "1".equals(((EditText) findViewById(R.id.et_load_pretrained)).getText().toString())? true: false;
 
 				Log.d("nntrainer", "check training_started: "+training_started+", testing_ing: "+testing_done+
 						", modelDestroyed(): "+modelDestroyed()+", load_pretrained:" + load_pretrained +
-						", cnn_train: "+cnn_train);
+						", cnn_train: "+cnn_trainable);
 				if(!training_started && !testing_ing && modelDestroyed()){
 					Training_log = "NNTrainer Start Training\n";
 					Log.d("nntrainer", "create Model @ activity");
 					training_started=true;
 					training_finished=false;
 					cur_iter=0;
-					model_pointer = createModel(in_shape, num_class, cnn_train);
+					model_pointer = createModel(in_shape, num_class, cnn_trainable);
 					Training_log += "Model Created \n";
 					Log.d("nntrainer", "create Model Done "+model_pointer);
 
