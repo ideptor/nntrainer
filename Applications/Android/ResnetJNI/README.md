@@ -43,7 +43,7 @@ android-ndk-r25c-linux-x86_64.zip
 $ unzip android-ndk-r25c-linux-86_64.zip
 $ ls
 android-ndk-r25c
-$ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${PWD}/android-ndk-r25c/
+$ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${PWD}/android-ndk-r25c/:${PWD}/android-ndk-r25c/bin/
 $ export PATH=$PATH:${PWD}/android-ndk-r25c/
 $ export ANDROID_NDK=${PWD}/android-ndk-r25c/
 ```

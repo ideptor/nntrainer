@@ -24,16 +24,18 @@ JNIEXPORT jlong JNICALL
 Java_com_applications_resnetjni_MainActivity_createModel(JNIEnv *env,
                                                          jobject j_obj,
                                                          jstring input_shape,
-                                                         jint unit) {
+                                                         jint unit,
+                                                         jboolean cnn_trainable
+                                                         ) {
   const char *in_shape = env->GetStringUTFChars(input_shape, 0);
   std::string in(in_shape);
-  ml::train::Model *model_ = createResnet18(in, unit);
+  ml::train::Model *model_ = createResnet18(in, unit, cnn_trainable);
   return reinterpret_cast<jlong>(model_);
 }
 
 JNIEXPORT jint JNICALL
-Java_com_applications_resnetjni_MainActivity_train_1resnet(
-  JNIEnv *env, jobject j_obj, jobjectArray args, jlong model_pointer) {
+Java_com_applications_resnetjni_MainActivity_trainResnet(
+  JNIEnv *env, jobject j_obj, jobjectArray args, jlong model_pointer, jboolean load_pretrained) {
   const int argc = env->GetArrayLength(args);
   char **argv = new char *[argc];
   for (unsigned int i = 0; i < argc; ++i) {
@@ -48,7 +50,7 @@ Java_com_applications_resnetjni_MainActivity_train_1resnet(
   ml::train::Model *model_ =
     reinterpret_cast<ml::train::Model *>(model_pointer);
 
-  jint status = init(argc, argv, model_);
+  jint status = init(argc, argv, model_, load_pretrained);
 
   for (unsigned int i = 0; i < argc; ++i) {
     delete[] argv[i];

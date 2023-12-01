@@ -3,8 +3,7 @@ package com.applications.resnetjni;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
-import android.content.res.AssetManager;
-import android.content.res.AssetFileDescriptor;
+
 import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
@@ -14,24 +13,15 @@ import android.net.Uri;
 import android.Manifest;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
-import android.os.FileUtils;
-import android.os.Handler;
-import android.provider.MediaStore;
-import android.provider.OpenableColumns;
 import android.text.method.ScrollingMovementMethod;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
-import android.widget.NumberPicker;
 import android.widget.TextView;
 import java.io.File;
 import java.io.IOException;
-import java.io.FileNotFoundException;
-import java.util.zip.ZipInputStream;
-import java.util.zip.ZipEntry;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -43,9 +33,9 @@ public class MainActivity extends AppCompatActivity {
         System.loadLibrary("resnet_jni");
     }
 
-    public native long createModel(String in_shape, int unit);
+    public native long createModel(String in_shape, int unit, boolean cnn_trainable);
 
-    public native int train_resnet(String[] args, long model_pointer);
+    public native int trainResnet(String[] args, long model_pointer, boolean load_pretrained);
 
     public native String testResnet(String[] args, long model_pointer);
 
@@ -175,29 +165,44 @@ public class MainActivity extends AppCompatActivity {
 
 
 	Button mkdir_btn =(Button)findViewById(R.id.mkdir_data);
-	folder_name = getApplicationContext().getFilesDir().getPath().toString()+"/"+edit_data_path.getText();
-	
-	train_folder = folder_name + "/train";
-	test_folder = folder_name + "/test";
+
 
 	mkdir_btn.setOnClickListener(new View.OnClickListener(){
 		@Override
 		public void onClick(View v){
+			String data_path= edit_data_path.getText().toString();
+			folder_name = getApplicationContext().getFilesDir().getPath().toString()+"/"+data_path;
+
+//		try {
+//			String[] files = getApplicationContext().getAssets().list("train");
+//			for (String file : files) {
+//				Log.e( "MLOPS", "files: " + file);
+//			}
+//
+//		} catch (IOException e) {
+//			throw new RuntimeException(e);
+//		}
+			Log.e( "MLOPS", "folder_name: " + folder_name);
+			train_folder = folder_name + "/train";
+			test_folder = folder_name + "/test";
+			String evaluate_folder = folder_name + "/evaluate";
+
 		    File newFolder = new File(folder_name);
 		    try{
-			newFolder.mkdir();
-			Log.d("nntrainer", "Create NNTrainer Data Folder"+folder_name);
+				newFolder.mkdir();
+				Log.d("nntrainer", "Create NNTrainer Data Folder: "+folder_name);
 			
 		    }catch (Exception e){
-			Log.d("nntrainer", "Already Exist"+folder_name);
+				Log.d("nntrainer", "Already Exist: "+folder_name);
 		    }
 		    
 		    try{
-			copyAssetFolder(getApplicationContext(), "train", train_folder);
-			copyAssetFolder(getApplicationContext(), "test", test_folder);			
+				copyAssetFolder(getApplicationContext(), data_path+"/train", train_folder);
+				copyAssetFolder(getApplicationContext(), data_path+"/test", test_folder);
+				copyAssetFolder(getApplicationContext(), data_path+"/evaluate", evaluate_folder);
 
 		    }catch (Exception e){
-			e.printStackTrace();
+				e.printStackTrace();
 		    }
 		    
 		    Log.d("nntrainer", "Training Data is Ready");
@@ -244,94 +249,109 @@ public class MainActivity extends AppCompatActivity {
                 String batch_size = edit_batch.getText().toString();
                 String data_split = edit_split.getText().toString();
                 String epoch = edit_epoch.getText().toString();
-		String bin_path=getApplicationContext().getFilesDir().getPath().toString()+"/"+edit_save.getText().toString();
-		String bin_best_path=getApplicationContext().getFilesDir().getPath().toString()+"/"+edit_save_best.getText().toString();
-		String in_shape = channel+":"+height+":"+width;
+				String bin_path=getApplicationContext().getFilesDir().getPath().toString()+"/"+edit_save.getText().toString();
+				String bin_best_path=getApplicationContext().getFilesDir().getPath().toString()+"/"+edit_save_best.getText().toString();
+				String in_shape = channel+":"+height+":"+width;
+				boolean cnn_trainable = "1".equals(((EditText) findViewById(R.id.et_cnn_train)).getText().toString())? true: false;
+				boolean load_pretrained = "1".equals(((EditText) findViewById(R.id.et_load_pretrained)).getText().toString())? true: false;
 
-		if(!training_started && !testing_ing && modelDestroyed()){
-		    Training_log = "NNTrainer Start Training\n";
-		    Log.d("nntrainer", "create Model");
-		    training_started=true;
-		    training_finished=false;		    
-		    cur_iter=0;
-		    model_pointer = createModel(in_shape, num_class);
-		    Training_log += "Model Created \n";
-		    Log.d("nntrainer", "create Model Done "+model_pointer);
-		    
-		    String[] args = {program_name, folder_name, batch_size, data_split, epoch, channel, height, width, bin_path, bin_best_path, String.valueOf(num_class)};
+				Log.d("nntrainer", "check training_started: "+training_started+", testing_ing: "+testing_done+
+						", modelDestroyed(): "+modelDestroyed()+", load_pretrained:" + load_pretrained +
+						", cnn_train: "+cnn_trainable);
+				if(!training_started && !testing_ing && modelDestroyed()){
+					Training_log = "NNTrainer Start Training\n";
+					Log.d("nntrainer", "create Model @ activity");
+					training_started=true;
+					training_finished=false;
+					cur_iter=0;
+					model_pointer = createModel(in_shape, num_class, cnn_trainable);
+					Training_log += "Model Created \n";
+					Log.d("nntrainer", "create Model Done "+model_pointer);
 
-		    
-		    Thread th = new Thread(new Runnable(){
-			    @Override
-			    public void run(){
-				stop=false;
-				training_ing = true;
-				Log.d("nntrainer", "running "+model_pointer+" "+num_class);
-				
-				int status=train_resnet(args, model_pointer);
-				
-				training_finished=true;
-				training_started = false;
-				training_ing = false;
-			    }
-			    
-			});
+					String[] args = {program_name, folder_name, batch_size, data_split, epoch, channel, height, width, bin_path, bin_best_path, String.valueOf(num_class)};
 
-		    th.start();
-		
-		    Thread th_ui = new Thread(new Runnable(){
-			    @Override
-			    public void run(){
-				
-				while (!training_finished){
-				    try{
-					Thread.sleep(1000);
-					int e = getCurrentEpoch(model_pointer);
-					
-					if(cur_epoch != e){
-					    cur_iter = 0;
-					    cur_epoch = e ;
-					}
-					    
-					String s="";
-					
-					if(!modelDestroyed() && stop){
-					    s="... Stopping \n";
-					} else if(modelDestroyed() && stop){
-					    s="Training Stoped\n";
-					} else {
-					    s=getTrainingStatus(model_pointer,cur_iter, Integer.parseInt(batch_size));
-					}
-					
-					if(!s.equals("-")){
-					    Training_log += s;
-					    data_view.setText(Training_log);
-					    cur_iter++;
-					}
-				    }catch(Exception e){
-					e.printStackTrace();
-				    }
+
+					Thread th = new Thread(new Runnable(){
+						@Override
+						public void run(){
+							stop=false;
+							training_ing = true;
+							Log.e("nntrainer", "running "+model_pointer+" "+num_class+", load_pretrained: " + load_pretrained);
+							long start = System.currentTimeMillis();
+							int status= trainResnet(args, model_pointer, load_pretrained);
+							long end = System.currentTimeMillis();
+
+							Log.e("nntrainer", "time elapsed: " + ((end-start)/1000.0) + "sec. status=" + status);
+
+							training_finished=true;
+							training_started = false;
+							training_ing = false;
+						}
+
+					});
+
+					th.start();
+
+					Thread th_ui = new Thread(new Runnable(){
+						@Override
+						public void run(){
+							String lastlog="";
+							while (!training_finished){
+								try{
+									Thread.sleep(1000);
+									int e = getCurrentEpoch(model_pointer);
+
+									if(cur_epoch != e){
+										cur_iter = 0;
+										cur_epoch = e ;
+									}
+
+									String s="";
+
+									if(!modelDestroyed() && stop){
+										s="... Stopping \n";
+									} else if(modelDestroyed() && stop){
+										s="Training Stoped\n";
+									} else {
+										s=getTrainingStatus(model_pointer,cur_iter, Integer.parseInt(batch_size));
+									}
+
+									if(!s.equals("-")){
+										lastlog = s;
+										Training_log += s;
+										data_view.setText(Training_log);
+										cur_iter++;
+										if (lastlog.indexOf("Accuracy") >= 0)
+											Log.e("nntrainer", "last training log: "+lastlog.substring(lastlog.indexOf("Accuracy")));
+//										if (lastlog.indexOf("Training Loss") >= 0)
+//											Log.e("nntrainer", "last training log: "+lastlog.substring(lastlog.indexOf("Training Loss")));
+									}
+
+								}catch(Exception e){
+									e.printStackTrace();
+								}
+							}
+
+						}
+					});
+					th_ui.start();
 				}
-			    }
-			});
-		    th_ui.start();
-		}
-	    }
+			}
 	    });
 
 
         Button stop_train_btn = (Button)findViewById(R.id.train_stop);
         stop_train_btn.setOnClickListener(new View.OnClickListener() {
 		@Override
-		public void onClick(View v) {
-		    Thread th = new Thread(new Runnable(){
-			    public void run(){
-				requestStop();
-				stop=true;
-			    }
-			});
-		    th.start();
-		}
+			public void onClick(View v) {
+				Thread th = new Thread(new Runnable(){
+					public void run(){
+					requestStop();
+					stop=true;
+					}
+				});
+				th.start();
+			}
 	    });
 
 
@@ -340,55 +360,60 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onClick(View v) {
-		Log.d("nntrainer", "Training Fished : "+String.valueOf(training_finished));
-		testing_done=false;
-		stop = false;
+//				data_view.setText("Start testing (loading models...)");
+
+				Log.d("nntrainer", "Training Fished : "+String.valueOf(training_finished));
+				testing_done=false;
+				stop = false;
                 String program_name = "nntrainer_resnet";
                 String batch_size = edit_batch.getText().toString();
                 String data_split = edit_split.getText().toString();
                 String epoch = edit_epoch.getText().toString();
-		String bin_path=getApplicationContext().getFilesDir().getPath().toString()+"/"+edit_save.getText().toString();
-		String bin_best_path=getApplicationContext().getFilesDir().getPath().toString()+"/"+edit_save_best.getText().toString();
-		String in_shape = channel+":"+height+":"+width;
+				String bin_path=getApplicationContext().getFilesDir().getPath().toString()+"/"+edit_save.getText().toString();
+				String bin_best_path=getApplicationContext().getFilesDir().getPath().toString()+"/"+edit_save_best.getText().toString();
+				String in_shape = channel+":"+height+":"+width;
 
-		if(!training_ing && !testing_ing && modelDestroyed()){
+				if(!training_ing && !testing_ing && modelDestroyed()){
 
-		    Testing_log = "NNTrainer Testing\n";
-		    model_pointer = createModel(in_shape, num_class);
-		    String[] args = {program_name, folder_name, batch_size, data_split, epoch, channel, height, width, bin_path, bin_best_path, String.valueOf(num_class)};
-		    
-		    Thread th_test = new Thread(new Runnable(){
-			    @Override
-			    public void run(){
-				testing_ing = true;
-				Log.d("nnttrainer", String.valueOf(testing_done));				
-				Testing_log=testResnet(args, model_pointer);
-				testing_done=true;
-				testing_ing = false;
-			    }
-			});
+					Testing_log = "NNTrainer Testing\n";
+					model_pointer = createModel(in_shape, num_class, false);
+					String[] args = {program_name, folder_name, batch_size, data_split, epoch, channel, height, width, bin_path, bin_best_path, String.valueOf(num_class)};
 
-		    th_test.start();
-		    Thread th_test_ui = new Thread(new Runnable(){
-			    @Override
-			    public void run(){
-				while(!testing_done){
-				    try{
-					Thread.sleep(1000);
-					if(!stop){
-					    Testing_log = getTestingResult();
-					    data_view.setText(Testing_log);
-					}
-				    } catch (Exception e){
-					e.printStackTrace();
-				    }
+					Thread th_test = new Thread(new Runnable(){
+						@Override
+						public void run(){
+						testing_ing = true;
+						Log.d("nnttrainer", String.valueOf(testing_done));
+						Testing_log=testResnet(args, model_pointer);
+						testing_done=true;
+						testing_ing = false;
+						}
+					});
+
+					th_test.start();
+					Thread th_test_ui = new Thread(new Runnable(){
+						@Override
+						public void run(){
+							String lastlog = "";
+							while(!testing_done){
+								try{
+									Thread.sleep(1000);
+									if(!stop){
+										Testing_log = getTestingResult();
+										data_view.setText(Testing_log);
+									}
+									lastlog = Testing_log.toString();
+								} catch (Exception e){
+									e.printStackTrace();
+								}
+							}
+							if (lastlog.indexOf("Accuarcy (") > 0)
+								Log.e("nntrainer", "last test log: "+lastlog.substring(lastlog.indexOf("Accuarcy (")));
+						}
+					});
+					th_test_ui.start();
 				}
-
-			    }
-			});
-		    th_test_ui.start();
-		}
-	    }
+	    	}
 	    });
 
 	Button infer_btn = (Button)findViewById(R.id.infer_resnet);
@@ -419,7 +444,7 @@ public class MainActivity extends AppCompatActivity {
 
 		if(!training_ing && !testing_ing && modelDestroyed()){
 
-		    model_pointer = createModel(in_shape, num_class);
+		    model_pointer = createModel(in_shape, num_class, false);
 
 		    String in_file = getFileName(data.getData());
 
